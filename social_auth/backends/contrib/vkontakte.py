@@ -178,6 +178,16 @@ class VKontakteOAuth2(BaseOAuth2):
         return data
 
 
+class VKontakteOAuth2Ad(VKontakteOAuth2):
+    """Vkontakte OAuth mechanism"""
+    SETTINGS_KEY_NAME = 'VK_AD_ID'
+    SETTINGS_SECRET_NAME = 'VK_AD_SECRET'
+    SCOPE_VAR_NAME = 'VK_AD_SCOPE'
+
+    def get_scope(self):
+        return setting(VKontakteOAuth2Ad.SCOPE_VAR_NAME)
+
+
 class VKontakteAppAuth(VKontakteOAuth2):
     """VKontakte Application Authentication support"""
 
@@ -298,5 +308,6 @@ def vkontakte_api(method, data):
 # Backend definition
 BACKENDS = {
     'vkontakte': VKontakteAuth,
-    'vkontakte-oauth2': VKontakteAppAuth if USE_APP_AUTH else VKontakteOAuth2
+    'vkontakte-oauth2': VKontakteAppAuth if USE_APP_AUTH else VKontakteOAuth2,
+    'vkontakte-oauth2-ad': VKontakteOAuth2Ad
 }
