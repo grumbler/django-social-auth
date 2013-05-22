@@ -139,6 +139,12 @@ class VKontakteOAuth2Backend(OAuthBackend):
         }
 
 
+class VKontakteOAuth2AdBackend(VKontakteOAuth2Backend):
+    """VKontakteOAuth2Ad authentication backend"""
+    name = 'vkontakte-oauth2-ad'
+
+
+
 class VKontakteOAuth2(BaseOAuth2):
     """Vkontakte OAuth mechanism"""
     AUTHORIZATION_URL = VK_AUTHORIZATION_URL
@@ -183,6 +189,7 @@ class VKontakteOAuth2Ad(VKontakteOAuth2):
     SETTINGS_KEY_NAME = 'VK_AD_ID'
     SETTINGS_SECRET_NAME = 'VK_AD_SECRET'
     SCOPE_VAR_NAME = 'VK_AD_SCOPE'
+    AUTH_BACKEND = VKontakteOAuth2AdBackend
 
     def get_scope(self):
         return setting(VKontakteOAuth2Ad.SCOPE_VAR_NAME)
