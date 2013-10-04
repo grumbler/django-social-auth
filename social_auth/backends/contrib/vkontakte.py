@@ -21,7 +21,7 @@ from hashlib import md5
 from time import time
 
 from social_auth.backends import SocialAuthBackend, OAuthBackend, BaseAuth, \
-                                 BaseOAuth2, USERNAME
+                                 BaseOAuth2
 from social_auth.exceptions import AuthTokenRevoked, AuthException
 from social_auth.utils import setting, log, dsa_urlopen
 from social_auth.exceptions import AuthCanceled, AuthFailed
@@ -56,7 +56,7 @@ class VKontakteBackend(SocialAuthBackend):
         if isinstance(nickname, (list, tuple, )):
             nickname = nickname[0]
         return {
-            USERNAME: nickname,
+            'username': nickname,
             'email': '',
             'fullname': '',
             'first_name': response.get('first_name')[0]
