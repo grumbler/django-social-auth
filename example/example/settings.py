@@ -14,10 +14,7 @@ TEMPLATE_DEBUG = DEBUG
 ROOT_PATH = abspath(dirname(__file__))
 PROJECT_NAME = basename(ROOT_PATH)
 
-ADMINS = (
-    ('Matias', 'matiasaguirre@gmail.com'),
-)
-
+ADMINS = ()
 MANAGERS = ADMINS
 
 DATABASES = {
@@ -84,6 +81,7 @@ INSTALLED_APPS = (
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.admin',
+    'south',
     'social_auth',
     'app',
 )
@@ -134,17 +132,23 @@ AUTHENTICATION_BACKENDS = (
     'social_auth.backends.contrib.livejournal.LiveJournalBackend',
     'social_auth.backends.contrib.douban.DoubanBackend',
     'social_auth.backends.browserid.BrowserIDBackend',
-    'social_auth.backends.contrib.vkontakte.VKontakteBackend',
+    'social_auth.backends.contrib.vk.VKOpenAPIBackend',
     'social_auth.backends.contrib.yandex.YandexOAuth2Backend',
     'social_auth.backends.contrib.yandex.YaruBackend',
     'social_auth.backends.contrib.odnoklassniki.OdnoklassnikiBackend',
     'social_auth.backends.contrib.odnoklassniki.OdnoklassnikiAppBackend',
-    'social_auth.backends.contrib.vkontakte.VKontakteOAuth2Backend',
+    'social_auth.backends.contrib.vk.VKOAuth2Backend',
     'social_auth.backends.contrib.mailru.MailruBackend',
     'social_auth.backends.contrib.dailymotion.DailymotionBackend',
     'social_auth.backends.contrib.shopify.ShopifyBackend',
+    'social_auth.backends.contrib.exacttarget.ExactTargetBackend',
     'social_auth.backends.contrib.stocktwits.StocktwitsBackend',
     'social_auth.backends.contrib.behance.BehanceBackend',
+    'social_auth.backends.contrib.readability.ReadabilityBackend',
+    'social_auth.backends.contrib.fedora.FedoraBackend',
+    'social_auth.backends.steam.SteamBackend',
+    'social_auth.backends.reddit.RedditBackend',
+    'social_auth.backends.amazon.AmazonBackend',
     'django.contrib.auth.backends.ModelBackend',
 )
 

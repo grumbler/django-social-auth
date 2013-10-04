@@ -19,12 +19,19 @@ import time
 from urllib import urlencode
 from urllib2 import HTTPError
 
-from django.utils import simplejson
+try:
+    import json as simplejson
+except ImportError:
+    try:
+        import simplejson
+    except ImportError:
+        from django.utils import simplejson
+
 from django.contrib.auth import authenticate
 from django.http import HttpResponse
 from django.template import TemplateDoesNotExist, RequestContext, loader
 
-from social_auth.backends import BaseOAuth2, OAuthBackend, USERNAME
+from social_auth.backends import BaseOAuth2, OAuthBackend
 from social_auth.utils import sanitize_log_data, backend_setting, setting,\
     log, dsa_urlopen
 from social_auth.exceptions import AuthException, AuthCanceled, AuthFailed,\
@@ -40,7 +47,7 @@ APP_NAMESPACE = setting('FACEBOOK_APP_NAMESPACE', None)
 REDIRECT_HTML = """
 <script type="text/javascript">
     var domain = 'https://apps.facebook.com/',
-        redirectURI = domain + {{ FACEBOOK_APP_NAMESPACE }} + '/';
+        redirectURI = domain + '{{ FACEBOOK_APP_NAMESPACE }}' + '/';
     window.top.location = 'https://www.facebook.com/dialog/oauth/' +
     '?client_id={{ FACEBOOK_APP_ID }}' +
     '&redirect_uri=' + encodeURIComponent(redirectURI) +
@@ -55,12 +62,12 @@ class FacebookBackend(OAuthBackend):
     # Default extra data to store
     EXTRA_DATA = [
         ('id', 'id'),
-        ('expires', setting('SOCIAL_AUTH_EXPIRATION', 'expires'))
+        ('expires', 'expires')
     ]
 
     def get_user_details(self, response):
         """Return user details from Facebook account"""
-        return {USERNAME: response.get('username', response.get('name')),
+        return {'username': response.get('username', response.get('name')),
                 'email': response.get('email', ''),
                 'fullname': response.get('name', ''),
                 'first_name': response.get('first_name', ''),
@@ -73,6 +80,8 @@ class FacebookAuth(BaseOAuth2):
     RESPONSE_TYPE = None
     SCOPE_SEPARATOR = ','
     AUTHORIZATION_URL = 'https://www.facebook.com/dialog/oauth'
+    REVOKE_TOKEN_URL = 'https://graph.facebook.com/{uid}/permissions'
+    REVOKE_TOKEN_METHOD = 'DELETE'
     ACCESS_TOKEN_URL = ACCESS_TOKEN
     SETTINGS_KEY_NAME = 'FACEBOOK_APP_ID'
     SETTINGS_SECRET_NAME = 'FACEBOOK_API_SECRET'
@@ -80,14 +89,20 @@ class FacebookAuth(BaseOAuth2):
     EXTRA_PARAMS_VAR_NAME = 'FACEBOOK_PROFILE_EXTRA_PARAMS'
 
     def user_data(self, access_token, *args, **kwargs):
-        """Loads user data from service"""
+        """
+        Grab user profile information from facebook.
+
+        returns: dict or None
+        """
+
         data = None
         params = backend_setting(self, self.EXTRA_PARAMS_VAR_NAME, {})
         params['access_token'] = access_token
         url = FACEBOOK_ME + urlencode(params)
 
         try:
-            data = simplejson.load(dsa_urlopen(url))
+            response = dsa_urlopen(url)
+            data = simplejson.load(response)
         except ValueError:
             extra = {'access_token': sanitize_log_data(access_token)}
             log('error', 'Could not load user data from Facebook.',
@@ -119,14 +134,17 @@ class FacebookAuth(BaseOAuth2):
                 'code': self.data['code']
             })
             try:
-                response = cgi.parse_qs(dsa_urlopen(url).read())
+                payload = dsa_urlopen(url)
             except HTTPError:
                 raise AuthFailed(self, 'There was an error authenticating '
                                        'the app')
 
-            access_token = response['access_token'][0]
-            if 'expires' in response:
-                expires = response['expires'][0]
+            response = payload.read()
+            parsed_response = cgi.parse_qs(response)
+
+            access_token = parsed_response['access_token'][0]
+            if 'expires' in parsed_response:
+                expires = parsed_response['expires'][0]
 
         if 'signed_request' in self.data:
             response = load_signed_request(
@@ -193,6 +211,14 @@ class FacebookAuth(BaseOAuth2):
         return backend_setting(cls, cls.SETTINGS_KEY_NAME) and\
                backend_setting(cls, cls.SETTINGS_SECRET_NAME)
 
+    @classmethod
+    def revoke_token_params(cls, token, uid):
+        return {'access_token': token}
+
+    @classmethod
+    def process_revoke_token_response(cls, response):
+        return response.code == 200 and response.read() == 'true'
+
 
 def base64_url_decode(data):
     data = data.encode(u'ascii')
@@ -227,7 +253,7 @@ class FacebookAppAuth(FacebookAuth):
     uses_redirect = False
 
     def auth_complete(self, *args, **kwargs):
-        if not self.application_auth():
+        if not self.application_auth() and 'error' not in self.data:
             return HttpResponse(self.auth_html())
 
         access_token = None
@@ -269,7 +295,7 @@ class FacebookAppAuth(FacebookAuth):
     def auth_html(self):
         app_id = backend_setting(self, self.SETTINGS_KEY_NAME)
         ctx = {
-            'FACEBOOK_APP_ID':  app_id,
+            'FACEBOOK_APP_ID': app_id,
             'FACEBOOK_EXTENDED_PERMISSIONS': ','.join(
                 backend_setting(self, self.SCOPE_VAR_NAME)
             ),

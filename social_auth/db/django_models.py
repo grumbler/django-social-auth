@@ -1,5 +1,6 @@
 """Django ORM models for Social Auth"""
 from django.db import models
+from django.db.models.loading import get_model
 from django.db.utils import IntegrityError
 
 from social_auth.db.base import UserSocialAuthMixin, AssociationMixin, \
@@ -20,6 +21,15 @@ USER_MODEL = setting('SOCIAL_AUTH_USER_MODEL') or \
              setting('AUTH_USER_MODEL') or \
              'auth.User'
 UID_LENGTH = setting('SOCIAL_AUTH_UID_LENGTH', 255)
+NONCE_SERVER_URL_LENGTH = setting('SOCIAL_AUTH_NONCE_SERVER_URL_LENGTH', 255)
+ASSOCIATION_SERVER_URL_LENGTH = setting(
+    'SOCIAL_AUTH_ASSOCIATION_SERVER_URL_LENGTH',
+    255
+)
+ASSOCIATION_HANDLE_LENGTH = setting(
+    'SOCIAL_AUTH_ASSOCIATION_HANDLE_LENGTH',
+    255
+)
 
 
 class UserSocialAuth(models.Model, UserSocialAuthMixin):
@@ -44,17 +54,26 @@ class UserSocialAuth(models.Model, UserSocialAuthMixin):
 
     @classmethod
     def username_max_length(cls):
-        field = UserSocialAuth.user_model()._meta.get_field('username')
-        return field.max_length
+        return cls._field_length('USERNAME_FIELD', 'username')
+
+    @classmethod
+    def email_max_length(cls):
+        return cls._field_length('EMAIL_FIELD', 'email')
+
+    @classmethod
+    def _field_length(self, setting_name, default_name):
+        model = UserSocialAuth.user_model()
+        field_name = getattr(model, setting_name, default_name)
+        return model._meta.get_field(field_name).max_length
 
     @classmethod
     def user_model(cls):
-        return UserSocialAuth._meta.get_field('user').rel.to
+        return get_model(*USER_MODEL.split('.'))
 
 
 class Nonce(models.Model, NonceMixin):
     """One use numbers"""
-    server_url = models.CharField(max_length=255)
+    server_url = models.CharField(max_length=NONCE_SERVER_URL_LENGTH)
     timestamp = models.IntegerField(db_index=True)
     salt = models.CharField(max_length=40)
 
@@ -65,8 +84,8 @@ class Nonce(models.Model, NonceMixin):
 
 class Association(models.Model, AssociationMixin):
     """OpenId account association"""
-    server_url = models.CharField(max_length=255)
-    handle = models.CharField(max_length=255)
+    server_url = models.CharField(max_length=ASSOCIATION_SERVER_URL_LENGTH)
+    handle = models.CharField(max_length=ASSOCIATION_HANDLE_LENGTH)
     secret = models.CharField(max_length=255)  # Stored base64 encoded
     issued = models.IntegerField(db_index=True)
     lifetime = models.IntegerField()

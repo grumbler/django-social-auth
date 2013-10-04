@@ -2,10 +2,10 @@ Introduction
 ============
 
 Django Social Auth is an easy way to setup social authentication/authorization
-mechanism for Django projects.
+mechanisms for Django projects.
 
 Crafted using base code from django-twitter-oauth_ and django-openid-auth_,
-implements a common interface to define new authentication providers from
+it implements a common interface to define new authentication providers from
 third parties.
 
 
@@ -13,7 +13,7 @@ third parties.
 Features
 --------
 This application provides user registration and login using social sites
-credentials, some features are:
+credentials. Some features are:
 
 - Registration and Login using social sites using the following providers
   at the moment:
@@ -25,6 +25,7 @@ credentials, some features are:
     * OpenId_ like myOpenID_
     * `Twitter OAuth`_
     * `Facebook OAuth`_
+    * `Amazon OAuth2`_
 
   Some contributions added support for:
 
@@ -36,7 +37,7 @@ credentials, some features are:
     * `GitHub OAuth`_
     * `Dropbox OAuth`_
     * `Flickr OAuth`_
-    * `Vkontakte OAuth`_
+    * `VK.com OAuth`_
     * `MSN Live Connect OAuth2`_
     * `Skyrock OAuth`_
     * `Yahoo OAuth`_
@@ -51,6 +52,9 @@ credentials, some features are:
     * `Twilio`_
     * `Weibo OAuth2`_
     * `Yandex OpenId`_
+    * `Readability OAuth`_
+    * `Stackoverflow OAuth2`_
+    * `Fedora OpenID`_
 
 - Basic user data population and signaling, to allows custom fields values
   from providers response
@@ -81,7 +85,7 @@ credentials, some features are:
 .. _GitHub OAuth: http://developer.github.com/v3/oauth/
 .. _Dropbox OAuth: https://www.dropbox.com/developers_beta/reference/api
 .. _Flickr OAuth: http://www.flickr.com/services/api/
-.. _Vkontakte OAuth: http://vk.com/developers.php?oid=-1&p=%D0%90%D0%B2%D1%82%D0%BE%D1%80%D0%B8%D0%B7%D0%B0%D1%86%D0%B8%D1%8F_%D1%81%D0%B0%D0%B9%D1%82%D0%BE%D0%B2
+.. _VK.com OAuth: http://vk.com/developers.php?oid=-1&p=%D0%90%D0%B2%D1%82%D0%BE%D1%80%D0%B8%D0%B7%D0%B0%D1%86%D0%B8%D1%8F_%D1%81%D0%B0%D0%B9%D1%82%D0%BE%D0%B2
 .. _MSN Live Connect OAuth2: http://msdn.microsoft.com/en-us/library/live/hh243647.aspx
 .. _Skyrock OAuth: http://www.skyrock.com/developer/
 .. _Yahoo OAuth: http://developer.yahoo.com/oauth/guide/oauth-auth-flow.html
@@ -97,3 +101,7 @@ credentials, some features are:
 .. _Twilio: https://www.twilio.com/user/account/connect/apps
 .. _Weibo OAuth2: http://open.weibo.com/wiki/Oauth2
 .. _Yandex OpenId: http://openid.yandex.ru/
+.. _Readability OAuth: http://www.readability.com/developers/api
+.. _Stackoverflow OAuth2: http://api.stackexchange.com/
+.. _Fedora OpenID: https://fedoraproject.org/wiki/OpenID
+.. _Amazon OAuth2: http://login.amazon.com/

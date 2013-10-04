@@ -9,9 +9,16 @@ values.
 By default account id is stored in extra_data field, check OAuthBackend
 class for details on how to extend it.
 """
-from django.utils import simplejson
+try:
+    import json as simplejson
+except ImportError:
+    try:
+        import simplejson
+    except ImportError:
+        from django.utils import simplejson
 
-from social_auth.backends import ConsumerBasedOAuth, OAuthBackend, USERNAME
+from social_auth.exceptions import AuthCanceled
+from social_auth.backends import ConsumerBasedOAuth, OAuthBackend
 
 
 # Skyrock configuration
@@ -34,7 +41,7 @@ class SkyrockBackend(OAuthBackend):
 
     def get_user_details(self, response):
         """Return user details from Skyrock account"""
-        return {USERNAME: response['username'],
+        return {'username': response['username'],
                 'email': response['email'],
                 'fullname': response['firstname'] + ' ' + response['name'],
                 'first_name': response['firstname'],
@@ -62,7 +69,7 @@ class SkyrockAuth(ConsumerBasedOAuth):
     def auth_complete(self, *args, **kwargs):
         """Completes loging process, must return user instance"""
         if 'denied' in self.data:
-            raise ValueError('Authentication denied')
+            raise AuthCanceled(self)
         else:
             return super(SkyrockAuth, self).auth_complete(*args, **kwargs)
 

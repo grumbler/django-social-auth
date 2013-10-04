@@ -18,8 +18,15 @@ from openid.extensions import sreg, ax, pape
 
 from oauth2 import Consumer as OAuthConsumer, Token, Request as OAuthRequest
 
+try:
+    import json as simplejson
+except ImportError:
+    try:
+        import simplejson
+    except ImportError:
+        from django.utils import simplejson
+
 from django.contrib.auth import authenticate
-from django.utils import simplejson
 from django.utils.importlib import import_module
 
 from social_auth.models import UserSocialAuth
@@ -32,7 +39,7 @@ from social_auth.exceptions import StopPipeline, AuthException, AuthFailed, \
                                    AuthCanceled, AuthUnknownError, \
                                    AuthTokenError, AuthMissingParameter, \
                                    AuthStateMissing, AuthStateForbidden, \
-                                   NotAllowedToDisconnect
+                                   NotAllowedToDisconnect, BackendError
 from social_auth.backends.utils import build_consumer_oauth_request
 
 
@@ -58,10 +65,6 @@ SREG_ATTR = [
 ]
 OPENID_ID_FIELD = 'openid_identifier'
 SESSION_NAME = 'openid'
-
-# key for username in user details dict used around, see get_user_details
-# method
-USERNAME = 'username'
 
 PIPELINE = setting('SOCIAL_AUTH_PIPELINE', (
                 'social_auth.backends.pipeline.social.social_auth_user',
@@ -148,6 +151,10 @@ class SocialAuthBackend(object):
                 out.update(result)
             else:
                 return result
+
+        # clean the partial pipeline at the end of the process
+        if 'request' in kwargs:
+            clean_partial_pipeline(kwargs['request'])
         return out
 
     def extra_data(self, user, uid, response, details):
@@ -160,7 +167,7 @@ class SocialAuthBackend(object):
 
     def get_user_details(self, response):
         """Must return user details in a know internal struct:
-            {USERNAME: <username if any>,
+            {'username': <username if any>,
              'email': <user email if any>,
              'fullname': <user full name if any>,
              'first_name': <user first name if any>,
@@ -218,22 +225,30 @@ class OAuthBackend(SocialAuthBackend):
         data = {'access_token': response.get('access_token', '')}
         name = cls.name.replace('-', '_').upper()
         names = (cls.EXTRA_DATA or []) + setting(name + '_EXTRA_DATA', [])
+
         for entry in names:
-            if len(entry) == 2:
-                (name, alias), discard = entry, False
-            elif len(entry) == 3:
-                name, alias, discard = entry
-            elif len(entry) == 1:
-                name = alias = entry
-            else:  # ???
-                continue
+            if type(entry) is str:
+                entry = (entry,)
 
-            value = response.get(name)
-            if discard and not value:
-                continue
-            data[alias] = value
+            try:
+                if len(entry) == 3:
+                    name, alias, discard = entry
+                elif len(entry) == 2:
+                    (name, alias), discard = entry, False
+                elif len(entry) == 1:
+                    (name,), (alias,), discard = entry, entry, False
+                else:
+                    raise ValueError('invalid tuple for EXTRA_DATA entry' % entry)
+
+                value = response.get(name)
+                if discard and not value:
+                    continue
+                data[alias] = value
+
+            except (TypeError, ValueError), e:
+                raise BackendError('invalid entry: %s' % (entry,))
+
         return data
-
 
 class OpenIDBackend(SocialAuthBackend):
     """Generic OpenID authentication backend"""
@@ -270,7 +285,7 @@ class OpenIDBackend(SocialAuthBackend):
 
     def get_user_details(self, response):
         """Return user details from an OpenID request"""
-        values = {USERNAME: '', 'email': '', 'fullname': '',
+        values = {'username': '', 'email': '', 'fullname': '',
                   'first_name': '', 'last_name': ''}
         # update values using SimpleRegistration or AttributeExchange
         # values
@@ -291,10 +306,13 @@ class OpenIDBackend(SocialAuthBackend):
             except ValueError:
                 last_name = fullname
 
-        values.update({'fullname': fullname, 'first_name': first_name,
-                       'last_name': last_name,
-                       USERNAME: values.get(USERNAME) or
-                                   (first_name.title() + last_name.title())})
+        values.update({
+            'fullname': fullname,
+            'first_name': first_name,
+            'last_name': last_name,
+            'username': values.get('username') or
+                        (first_name.title() + last_name.title())
+        })
         return values
 
     def extra_data(self, user, uid, response, details):
@@ -389,9 +407,11 @@ class BaseAuth(object):
         """
         backend_name = self.AUTH_BACKEND.name.upper().replace('-', '_')
         extra_arguments = setting(backend_name + '_AUTH_EXTRA_ARGUMENTS', {})
-        for key in extra_arguments:
+        for key, value in extra_arguments.iteritems():
             if key in self.data:
                 extra_arguments[key] = self.data[key]
+            elif value:
+                extra_arguments[key] = value
         return extra_arguments
 
     @property
@@ -411,13 +431,20 @@ class BaseAuth(object):
         """
         name = self.AUTH_BACKEND.name
         if UserSocialAuth.allowed_to_disconnect(user, name, association_id):
+            do_revoke = setting('SOCIAL_AUTH_REVOKE_TOKENS_ON_DISCONNECT')
+            filter_args = {}
+
             if association_id:
-                UserSocialAuth.get_social_auth_for_user(user)\
-                                .get(id=association_id).delete()
+                filter_args['id'] = association_id
             else:
-                UserSocialAuth.get_social_auth_for_user(user)\
-                                .filter(provider=name)\
-                                .delete()
+                filter_args['provider'] = name
+            instances = UserSocialAuth.get_social_auth_for_user(user)\
+                                      .filter(**filter_args)
+
+            if do_revoke:
+                for instance in instances:
+                    instance.revoke_token(drop_token=False)
+            instances.delete()
         else:
             raise NotAllowedToDisconnect()
 
@@ -513,7 +540,7 @@ class OpenIdAuth(BaseAuth):
                 max_age = None
 
         if (max_age is not None or preferred_policies is not None
-            or preferred_level_types is not None):
+           or preferred_level_types is not None):
             pape_request = pape.Request(
                 preferred_auth_policies=preferred_policies,
                 max_auth_age=max_age,
@@ -533,7 +560,8 @@ class OpenIdAuth(BaseAuth):
         """Return true if openid request will be handled with redirect or
         HTML content will be returned.
         """
-        return self.openid_request().shouldSendRedirect()
+        return self.openid_request(self.auth_extra_arguments())\
+                        .shouldSendRedirect()
 
     def openid_request(self, extra_params=None):
         """Return openid request"""
@@ -635,7 +663,7 @@ class ConsumerBasedOAuth(BaseOAuth):
         for unauthed_token in unauthed_tokens:
             token = Token.from_string(unauthed_token)
             if token.key == self.data.get('oauth_token', 'no-token'):
-                unauthed_tokens = list(set(unauthed_tokens) - \
+                unauthed_tokens = list(set(unauthed_tokens) -
                                        set([unauthed_token]))
                 self.request.session[name] = unauthed_tokens
                 self.request.session.modified = True
@@ -654,6 +682,9 @@ class ConsumerBasedOAuth(BaseOAuth):
 
     def do_auth(self, access_token, *args, **kwargs):
         """Finish the auth process once the access_token was retrieved"""
+        if isinstance(access_token, basestring):
+            access_token = Token.from_string(access_token)
+
         data = self.user_data(access_token)
         if data is not None:
             data['access_token'] = access_token.to_string()
@@ -721,6 +752,8 @@ class BaseOAuth2(BaseOAuth):
     AUTHORIZATION_URL = None
     ACCESS_TOKEN_URL = None
     REFRESH_TOKEN_URL = None
+    REVOKE_TOKEN_URL = None
+    REVOKE_TOKEN_METHOD = 'POST'
     RESPONSE_TYPE = 'code'
     REDIRECT_STATE = True
     STATE_PARAMETER = True
@@ -790,8 +823,8 @@ class BaseOAuth2(BaseOAuth):
         return state
 
     def process_error(self, data):
-        if data.get('error'):
-            error = self.data.get('error_description') or self.data['error']
+        error = data.get('error_description') or data.get('error')
+        if error:
             raise AuthFailed(self, error)
 
     def auth_complete_params(self, state=None):
@@ -851,9 +884,40 @@ class BaseOAuth2(BaseOAuth):
             data=urlencode(cls.refresh_token_params(token)),
             headers=cls.auth_headers()
         )
-        return cls.process_refresh_token_response(
-            dsa_urlopen(request).read()
-        )
+        return cls.process_refresh_token_response(dsa_urlopen(request).read())
+
+    @classmethod
+    def revoke_token_params(cls, token, uid):
+        return None
+
+    @classmethod
+    def revoke_token_headers(cls, token, uid):
+        return None
+
+    @classmethod
+    def process_revoke_token_response(cls, response):
+        return response.code == 200
+
+    @classmethod
+    def revoke_token(cls, token, uid):
+        if not cls.REVOKE_TOKEN_URL:
+            return
+        url = cls.REVOKE_TOKEN_URL.format(token=token, uid=uid)
+        params = cls.revoke_token_params(token, uid) or {}
+        headers = cls.revoke_token_headers(token, uid) or {}
+        data = None
+
+        if cls.REVOKE_TOKEN_METHOD == 'GET':
+            url = '{}?{}'.format(url, urlencode(params))
+        else:
+            data = urlencode(params)
+
+        request = Request(url, data=data, headers=headers)
+        if cls.REVOKE_TOKEN_URL.lower() not in ('get', 'post'):
+            # Patch get_method to return the needed method
+            request.get_method = lambda: cls.REVOKE_TOKEN_METHOD
+        response = dsa_urlopen(request)
+        return cls.process_revoke_token_response(response)
 
     def do_auth(self, access_token, *args, **kwargs):
         """Finish the auth process once the access_token was retrieved"""

@@ -9,7 +9,9 @@ Contents:
    oauth
    openid
 
+   amazon
    angel
+   appsfuel
    behance
    bitbucket
    browserid
@@ -17,6 +19,7 @@ Contents:
    douban
    dropbox
    evernote
+   exacttarget
    facebook
    flickr
    github
@@ -27,14 +30,20 @@ Contents:
    mailru
    mixcloud
    odnoklassnikiru
+   rdio
+   readability
+   reddit
    shopify
    skyrock
    soundcloud
+   stackoverflow
+   steam
    stocktwits
    stripe
    tripit
+   tumblr
    twilio
    twitter
-   vkontakte
+   vk
    weibo
    yahoo

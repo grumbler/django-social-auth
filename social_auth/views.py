@@ -12,7 +12,6 @@ from django.contrib.auth import login, REDIRECT_FIELD_NAME
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
-from django.db import IntegrityError
 
 from social_auth.utils import sanitize_redirect, setting, \
                               backend_setting, clean_partial_pipeline
@@ -75,8 +74,14 @@ def disconnect(request, backend, association_id=None):
 
 def auth_process(request, backend):
     """Authenticate using social backend"""
-    # Save any defined next value into session
     data = request.POST if request.method == 'POST' else request.GET
+
+    # Save extra data into session.
+    for field_name in setting('SOCIAL_AUTH_FIELDS_STORED_IN_SESSION', []):
+        if field_name in data:
+            request.session[field_name] = data[field_name]
+
+    # Save any defined next value into session
     if REDIRECT_FIELD_NAME in data:
         # Check and sanitize a user-defined GET/POST next field value
         redirect = data[REDIRECT_FIELD_NAME]
@@ -99,13 +104,7 @@ def complete_process(request, backend, *args, **kwargs):
     # pop redirect value before the session is trashed on login()
     redirect_value = request.session.get(REDIRECT_FIELD_NAME, '') or \
                      request.REQUEST.get(REDIRECT_FIELD_NAME, '')
-    # Django 1.5 allow us to define custom User Model, so integrity errors
-    # can be raised.
-    try:
-        user = auth_complete(request, backend, *args, **kwargs)
-    except IntegrityError:
-        url = setting('SIGNUP_ERROR_URL', setting('LOGIN_ERROR_URL'))
-        return HttpResponseRedirect(url)
+    user = auth_complete(request, backend, *args, **kwargs)
 
     if isinstance(user, HttpResponse):
         return user
@@ -139,9 +138,8 @@ def complete_process(request, backend, *args, **kwargs):
                         request.session.set_expiry(None)
 
             # store last login backend name in session
-            key = setting('SOCIAL_AUTH_LAST_LOGIN',
-                          'social_auth_last_login_backend')
-            request.session[key] = social_user.provider
+            request.session['social_auth_last_login_backend'] = \
+                    social_user.provider
 
             # Remove possible redirect URL from session, if this is a new
             # account, send him to the new-users-page if defined.

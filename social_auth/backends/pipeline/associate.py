@@ -12,9 +12,9 @@ def associate_by_email(details, user=None, *args, **kwargs):
     email = details.get('email')
 
     if email:
-        # try to associate accounts registered with the same email address,
+        # Try to associate accounts registered with the same email address,
         # only if it's a single object. AuthException is raised if multiple
-        # objects are returned
+        # objects are returned.
         try:
             return {'user': UserSocialAuth.get_user_by_email(email=email)}
         except MultipleObjectsReturned:

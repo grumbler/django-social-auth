@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 
 from openid.association import Association as OIDAssociation
 
-from social_auth.utils import setting, utc
 
 # django.contrib.auth and mongoengine.django.auth regex to validate usernames
 # '^[\w@.+-_]+$', we use the opposite to clean invalid characters
@@ -35,17 +34,33 @@ class UserSocialAuthMixin(object):
         else:
             return {}
 
+    def revoke_token(self, drop_token=True):
+        """Attempts to revoke permissions for provider."""
+        if 'access_token' in self.tokens:
+            success = self.get_backend().revoke_token(
+                self.tokens['access_token'],
+                self.uid
+            )
+            if success and drop_token:
+                self.extra_data.pop('access_token', None)
+                self.save()
+
     def refresh_token(self):
-        data = self.extra_data
-        if 'refresh_token' in data or 'access_token' in data:
+        refresh_token = self.extra_data.get('refresh_token')
+        if refresh_token:
             backend = self.get_backend()
             if hasattr(backend, 'refresh_token'):
-                token = data.get('refresh_token') or data.get('access_token')
-                response = backend.refresh_token(token)
-                self.extra_data.update(
-                    backend.AUTH_BACKEND.extra_data(self.user, self.uid,
-                                                    response)
-                )
+                response = backend.refresh_token(refresh_token)
+                new_access_token = response.get('access_token')
+                # We have not got a new access token, so don't lose the
+                # existing one.
+                if not new_access_token:
+                    return
+                self.extra_data['access_token'] = new_access_token
+                # New refresh token might be given.
+                new_refresh_token = response.get('refresh_token')
+                if new_refresh_token:
+                    self.extra_data['refresh_token'] = new_refresh_token
                 self.save()
 
     def expiration_datetime(self):
@@ -56,22 +71,20 @@ class UserSocialAuthMixin(object):
         timedelta is inferred from current time (using UTC timezone). None is
         returned if there's no value stored or it's invalid.
         """
-        name = setting('SOCIAL_AUTH_EXPIRATION', 'expires')
-        if self.extra_data and name in self.extra_data:
+        if self.extra_data and 'expires' in self.extra_data:
             try:
-                expires = int(self.extra_data.get(name))
+                expires = int(self.extra_data['expires'])
             except (ValueError, TypeError):
                 return None
 
-            now = datetime.now()
-            now_timestamp = time.mktime(now.timetuple())
+            now = datetime.utcnow()
 
             # Detect if expires is a timestamp
-            if expires > now_timestamp:  # expires is a datetime
-                return datetime.utcfromtimestamp(expires) \
-                               .replace(tzinfo=utc) - \
-                       now.replace(tzinfo=utc)
-            else:  # expires is a timedelta
+            if expires > time.mktime(now.timetuple()):
+                # expires is a datetime
+                return datetime.fromtimestamp(expires) - now
+            else:
+                # expires is a timedelta
                 return timedelta(seconds=expires)
 
     @classmethod
@@ -80,6 +93,10 @@ class UserSocialAuthMixin(object):
 
     @classmethod
     def username_max_length(cls):
+        raise NotImplementedError('Implement in subclass')
+
+    @classmethod
+    def email_max_length(cls):
         raise NotImplementedError('Implement in subclass')
 
     @classmethod
@@ -102,17 +119,40 @@ class UserSocialAuthMixin(object):
         return valid_password or qs.count() > 0
 
     @classmethod
+    def user_username(cls, user):
+        if hasattr(user, 'USERNAME_FIELD'):
+            # Django 1.5 custom user model, 'username' is just for internal
+            # use, doesn't imply that the model should have an username field
+            field_name = user.USERNAME_FIELD
+        else:
+            field_name = 'username'
+        return getattr(user, field_name)
+
+    @classmethod
+    def username_field(cls, values):
+        user_model = cls.user_model()
+        if hasattr(user_model, 'USERNAME_FIELD'):
+            # Django 1.5 custom user model, 'username' is just for internal
+            # use, doesn't imply that the model should have an username field
+            values[user_model.USERNAME_FIELD] = values.pop('username')
+        return values
+
+    @classmethod
     def simple_user_exists(cls, *args, **kwargs):
         """
         Return True/False if a User instance exists with the given arguments.
         Arguments are directly passed to filter() manager method.
+        TODO: consider how to ensure case-insensitive email matching
         """
+        kwargs = cls.username_field(kwargs)
+        # Use count() > 0 since mongoengine doesn't support .exists(),
+        # Check issue #728
         return cls.user_model().objects.filter(*args, **kwargs).count() > 0
 
     @classmethod
-    def create_user(cls, username, email=None):
-        return cls.user_model().objects.create_user(username=username,
-                                                    email=email)
+    def create_user(cls, *args, **kwargs):
+        kwargs = cls.username_field(kwargs)
+        return cls.user_model().objects.create_user(*args, **kwargs)
 
     @classmethod
     def get_user(cls, pk):
@@ -123,7 +163,10 @@ class UserSocialAuthMixin(object):
 
     @classmethod
     def get_user_by_email(cls, email):
-        return cls.user_model().objects.get(email=email)
+        """Case insensitive search"""
+        # Do case-insensitive match, since real-world email address is
+        # case-insensitive.
+        return cls.user_model().objects.get(email__iexact=email)
 
     @classmethod
     def resolve_user_or_id(cls, user_or_id):

@@ -11,11 +11,16 @@ class for details on how to extend it.
 """
 from urllib2 import Request
 
-from django.utils import simplejson
+try:
+    import json as simplejson
+except ImportError:
+    try:
+        import simplejson
+    except ImportError:
+        from django.utils import simplejson
 
 from social_auth.utils import dsa_urlopen
-from social_auth.backends import ConsumerBasedOAuth, OAuthBackend, USERNAME, \
-                                 BaseOAuth2
+from social_auth.backends import ConsumerBasedOAuth, OAuthBackend, BaseOAuth2
 from social_auth.exceptions import AuthCanceled
 
 
@@ -39,7 +44,7 @@ class DoubanBackend(OAuthBackend):
 
     def get_user_details(self, response):
         """Return user details from Douban"""
-        return {USERNAME: response["db:uid"]["$t"],
+        return {'username': response["db:uid"]["$t"],
                 'email': ''}
 
 
@@ -84,7 +89,7 @@ class DoubanBackend2(OAuthBackend):
 
     def get_user_details(self, response):
         """Return user details from Douban"""
-        return {USERNAME: response.get('uid', ''),
+        return {'username': response.get('uid', ''),
                 'fullname': response.get('name', ''),
                 'email': ''}
 
@@ -96,6 +101,7 @@ class DoubanAuth2(BaseOAuth2):
     AUTH_BACKEND = DoubanBackend2
     SETTINGS_KEY_NAME = 'DOUBAN2_CONSUMER_KEY'
     SETTINGS_SECRET_NAME = 'DOUBAN2_CONSUMER_SECRET'
+    REDIRECT_STATE = False
 
     def user_data(self, access_token, *args, **kwargs):
         """Return user data provided"""

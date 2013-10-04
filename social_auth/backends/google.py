@@ -18,11 +18,17 @@ from urllib2 import Request
 
 from oauth2 import Request as OAuthRequest
 
-from django.utils import simplejson
+try:
+    import json as simplejson
+except ImportError:
+    try:
+        import simplejson
+    except ImportError:
+        from django.utils import simplejson
 
 from social_auth.utils import setting, dsa_urlopen
 from social_auth.backends import OpenIdAuth, ConsumerBasedOAuth, BaseOAuth2, \
-                                 OAuthBackend, OpenIDBackend, USERNAME
+                                 OAuthBackend, OpenIDBackend
 from social_auth.exceptions import AuthFailed
 
 
@@ -59,7 +65,7 @@ class GoogleOAuthBackend(OAuthBackend):
     def get_user_details(self, response):
         """Return user details from Orkut account"""
         email = response.get('email', '')
-        return {USERNAME: email.split('@', 1)[0],
+        return {'username': email.split('@', 1)[0],
                 'email': email,
                 'fullname': '',
                 'first_name': '',
@@ -71,7 +77,7 @@ class GoogleOAuth2Backend(GoogleOAuthBackend):
     name = 'google-oauth2'
     EXTRA_DATA = [
         ('refresh_token', 'refresh_token', True),
-        ('expires_in', setting('SOCIAL_AUTH_EXPIRATION', 'expires')),
+        ('expires_in', 'expires'),
         ('token_type', 'token_type', True)
     ]
 
@@ -85,7 +91,7 @@ class GoogleOAuth2Backend(GoogleOAuthBackend):
 
     def get_user_details(self, response):
         email = response.get('email', '')
-        return {USERNAME: email.split('@', 1)[0],
+        return {'username': email.split('@', 1)[0],
                 'email': email,
                 'fullname': response.get('name', ''),
                 'first_name': response.get('given_name', ''),
@@ -191,6 +197,8 @@ class GoogleOAuth2(BaseOAuth2):
     AUTH_BACKEND = GoogleOAuth2Backend
     AUTHORIZATION_URL = 'https://accounts.google.com/o/oauth2/auth'
     ACCESS_TOKEN_URL = 'https://accounts.google.com/o/oauth2/token'
+    REVOKE_TOKEN_URL = 'https://accounts.google.com/o/oauth2/revoke'
+    REVOKE_TOKEN_METHOD = 'GET'
     SETTINGS_KEY_NAME = _OAUTH2_KEY_NAME
     SETTINGS_SECRET_NAME = 'GOOGLE_OAUTH2_CLIENT_SECRET'
     SCOPE_VAR_NAME = 'GOOGLE_OAUTH_EXTRA_SCOPE'
@@ -200,6 +208,14 @@ class GoogleOAuth2(BaseOAuth2):
     def user_data(self, access_token, *args, **kwargs):
         """Return user data from Google API"""
         return googleapis_profile(GOOGLEAPIS_PROFILE, access_token)
+
+    @classmethod
+    def revoke_token_params(cls, token, uid):
+        return {'token': token}
+
+    @classmethod
+    def revoke_token_headers(cls, token, uid):
+        return {'Content-type': 'application/json'}
 
 
 def googleapis_email(url, params):
@@ -242,10 +258,13 @@ def validate_whitelists(backend, email):
     """
     emails = setting('GOOGLE_WHITE_LISTED_EMAILS', [])
     domains = setting('GOOGLE_WHITE_LISTED_DOMAINS', [])
-    if emails and email in emails:
-        return  # you're good
-    if domains and email.split('@', 1)[1] not in domains:
-        raise AuthFailed(backend, 'Domain not allowed')
+    if not emails and not domains:
+        return True
+    if email in set(emails):
+        return True # you're good
+    if email.split('@', 1)[1] in set(domains):
+        return True
+    raise AuthFailed(backend, 'User not allowed')
 
 
 # Backend definition

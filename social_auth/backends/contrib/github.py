@@ -5,6 +5,9 @@ This contribution adds support for GitHub OAuth service. The settings
 GITHUB_APP_ID and GITHUB_API_SECRET must be defined with the values
 given by GitHub application registration process.
 
+GITHUB_ORGANIZATION is an optional setting that will allow you to constrain
+authentication to a given GitHub organization.
+
 Extended permissions are supported by defining GITHUB_EXTENDED_PERMISSIONS
 setting, it must be a list of values to request.
 
@@ -12,17 +15,32 @@ By default account id and token expiration time are stored in extra_data
 field, check OAuthBackend class for details on how to extend it.
 """
 from urllib import urlencode
+from urllib2 import HTTPError
 
-from django.utils import simplejson
+try:
+    import json as simplejson
+except ImportError:
+    try:
+        import simplejson
+    except ImportError:
+        from django.utils import simplejson
 
-from social_auth.utils import setting, dsa_urlopen
-from social_auth.backends import BaseOAuth2, OAuthBackend, USERNAME
+from django.conf import settings
+
+from social_auth.utils import dsa_urlopen
+from social_auth.backends import BaseOAuth2, OAuthBackend
+from social_auth.exceptions import AuthFailed
 
 
 # GitHub configuration
 GITHUB_AUTHORIZATION_URL = 'https://github.com/login/oauth/authorize'
 GITHUB_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token'
 GITHUB_USER_DATA_URL = 'https://api.github.com/user'
+
+# GitHub organization configuration
+GITHUB_ORGANIZATION_MEMBER_OF_URL = \
+        'https://api.github.com/orgs/{org}/members/{username}'
+
 GITHUB_SERVER = 'github.com'
 
 
@@ -32,14 +50,42 @@ class GithubBackend(OAuthBackend):
     # Default extra data to store
     EXTRA_DATA = [
         ('id', 'id'),
-        ('expires', setting('SOCIAL_AUTH_EXPIRATION', 'expires'))
+        ('expires', 'expires')
     ]
+
+    def _fetch_emails(self, access_token):
+        """Fetch private emails from Github account"""
+        url = GITHUB_USER_DATA_URL + '/emails?' + urlencode({
+            'access_token': access_token
+        })
+
+        try:
+            data = simplejson.load(dsa_urlopen(url))
+        except (ValueError, HTTPError):
+            data = []
+        return data
 
     def get_user_details(self, response):
         """Return user details from Github account"""
-        return {USERNAME: response.get('login'),
-                'email': response.get('email') or '',
-                'first_name': response.get('name')}
+        name = response.get('name') or ''
+        details = {'username': response.get('login')}
+
+        try:
+            email = self._fetch_emails(response.get('access_token'))[0]
+        except IndexError:
+            details['email'] = ''
+        else:
+            details['email'] = email
+
+        try:
+            # GitHub doesn't separate first and last names. Let's try.
+            first_name, last_name = name.split(' ', 1)
+        except ValueError:
+            details['first_name'] = name
+        else:
+            details['first_name'] = first_name
+            details['last_name'] = last_name
+        return details
 
 
 class GithubAuth(BaseOAuth2):
@@ -53,16 +99,40 @@ class GithubAuth(BaseOAuth2):
     # Look at http://developer.github.com/v3/oauth/
     SCOPE_VAR_NAME = 'GITHUB_EXTENDED_PERMISSIONS'
 
+    GITHUB_ORGANIZATION = getattr(settings, 'GITHUB_ORGANIZATION', None)
+
     def user_data(self, access_token, *args, **kwargs):
         """Loads user data from service"""
         url = GITHUB_USER_DATA_URL + '?' + urlencode({
             'access_token': access_token
         })
-        try:
-            return simplejson.load(dsa_urlopen(url))
-        except ValueError:
-            return None
 
+        try:
+            data = simplejson.load(dsa_urlopen(url))
+        except ValueError:
+            data = None
+
+        # if we have a github organization defined, test that the current users
+        # is a member of that organization.
+        if data and self.GITHUB_ORGANIZATION:
+            member_url = GITHUB_ORGANIZATION_MEMBER_OF_URL.format(
+                org=self.GITHUB_ORGANIZATION,
+                username=data.get('login')
+            ) + '?' + urlencode({
+                'access_token': access_token
+            })
+
+            try:
+                response = dsa_urlopen(member_url)
+            except HTTPError:
+                data = None
+            else:
+                # if the user is a member of the organization, response code
+                # will be 204, see http://bit.ly/ZS6vFl
+                if response.code != 204:
+                    raise AuthFailed('User doesn\'t belong to the '
+                                     'organization')
+        return data
 
 # Backend definition
 BACKENDS = {

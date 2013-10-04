@@ -14,14 +14,18 @@ field, check OAuthBackend class for details on how to extend it.
 """
 from urllib import urlencode
 
-from django.utils import simplejson
-from django.conf import settings
+try:
+    import json as simplejson
+except ImportError:
+    try:
+        import simplejson
+    except ImportError:
+        from django.utils import simplejson
 
-from social_auth.utils import setting, dsa_urlopen
-from social_auth.backends import BaseOAuth2, OAuthBackend, USERNAME
+from social_auth.utils import dsa_urlopen
+from social_auth.backends import BaseOAuth2, OAuthBackend
 
 
-EXPIRES_NAME = getattr(settings, 'SOCIAL_AUTH_EXPIRATION', 'expires')
 # SoundCloud configuration
 SOUNDCLOUD_AUTHORIZATION_URL = 'https://soundcloud.com/connect'
 SOUNDCLOUD_ACCESS_TOKEN_URL = 'https://api.soundcloud.com/oauth2/token'
@@ -29,7 +33,7 @@ SOUNDCLOUD_USER_DATA_URL = 'https://api.soundcloud.com/me.json'
 SOUNDCLOUD_SERVER = 'soundcloud.com'
 EXTRA_DATA = [
     ('refresh_token', 'refresh_token'),
-    ('expires_in', EXPIRES_NAME)
+    ('expires_in', 'expires')
 ]
 
 
@@ -39,7 +43,7 @@ class SoundcloudBackend(OAuthBackend):
     # Default extra data to store
     EXTRA_DATA = [
         ('id', 'id'),
-        ('expires', setting('SOCIAL_AUTH_EXPIRATION', 'expires'))
+        ('expires', 'expires')
     ]
 
     def get_user_details(self, response):
@@ -52,7 +56,7 @@ class SoundcloudBackend(OAuthBackend):
         else:
             last_name = ''
 
-        return {USERNAME: response.get('username'),
+        return {'username': response.get('username'),
                 'email': response.get('email') or '',
                 'fullname': fullname,
                 'first_name': first_name,
