@@ -6,9 +6,15 @@ This contribution adds support for VKontakte OpenAPI and OAuth 2.0 service in
 the form www.vkontakte.ru. Username is retrieved from the identity returned by
 server.
 """
+try:
+    import json as simplejson
+except ImportError:
+    try:
+        import simplejson
+    except ImportError:
+        from django.utils import simplejson
 
 from django.contrib.auth import authenticate
-from django.utils import simplejson
 
 from urllib import urlencode
 from hashlib import md5
