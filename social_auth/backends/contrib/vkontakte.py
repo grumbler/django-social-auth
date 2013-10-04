@@ -138,7 +138,7 @@ class VKontakteOAuth2Backend(OAuthBackend):
     def get_user_details(self, response):
         """Return user details from Vkontakte account"""
         return {
-            USERNAME: response.get('screen_name'),
+            'username': response.get('screen_name'),
             'email':  '',
             'first_name': response.get('first_name'),
             'last_name': response.get('last_name')
