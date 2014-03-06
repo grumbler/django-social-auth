@@ -362,18 +362,22 @@ class BaseAuth(object):
 
     def to_session_dict(self, next_idx, *args, **kwargs):
         """Returns dict to store on session for partial pipeline."""
-        return {
+        import pickle
+        d = {
             'next': next_idx,
             'backend': self.AUTH_BACKEND.name,
             'args': tuple(map(model_to_ctype, args)),
             'kwargs': dict((key, model_to_ctype(val))
                                 for key, val in kwargs.iteritems())
         }
+        return {'social_data': pickle.dumps(d)}
 
     def from_session_dict(self, session_data, *args, **kwargs):
         """Takes session saved data to continue pipeline and merges with any
         new extra argument needed. Returns tuple with next pipeline index
         entry, arguments and keyword arguments to continue the process."""
+        import pickle
+        session_data = pickle.loads(session_data['social_data'])
         args = args[:] + tuple(map(ctype_to_model, session_data['args']))
 
         kwargs = kwargs.copy()
