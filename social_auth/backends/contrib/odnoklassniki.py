@@ -19,6 +19,7 @@ registration mail to set settings values.
 from urllib import urlencode, unquote
 from urllib2 import Request
 from hashlib import md5
+from time import time
 
 try:
     import json as simplejson
@@ -59,6 +60,13 @@ class OdnoklassnikiBackend(OAuthBackend):
             'first_name': unquote(response['first_name']),
             'last_name': unquote(response['last_name'])
         }
+
+    @classmethod
+    def extra_data(cls, user, uid, response, details=None):
+        data = super(OdnoklassnikiBackend, cls).extra_data(user, uid, response, details)
+        expires_in = 30 * 24 * 60 * 60
+        data['expires'] = time() + expires_in
+        return data
 
 
 class OdnoklassnikiMixin(object):
