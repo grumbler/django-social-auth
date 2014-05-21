@@ -92,7 +92,9 @@ class AuthStateForbidden(AuthException):
 
 class AuthAlreadyAssociated(AuthException):
     """A different user has already associated the target social account"""
-    pass
+    def __init__(self, backend, msg, social_user, *args, **kwargs):
+        self.social_user = social_user
+        super(AuthAlreadyAssociated, self).__init__(backend, msg, *args, **kwargs)
 
 
 class AuthTokenRevoked(AuthException):
