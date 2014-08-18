@@ -1,5 +1,7 @@
 from django.utils.translation import ugettext
 
+from django.db import transaction
+
 from social_auth.models import UserSocialAuth, SOCIAL_AUTH_MODELS_MODULE
 from social_auth.exceptions import AuthAlreadyAssociated
 
@@ -31,7 +33,8 @@ def associate_user(backend, user, uid, social_user=None, *args, **kwargs):
         return None
 
     try:
-        social = UserSocialAuth.create_social_auth(user, uid, backend.name)
+        with transaction.atomic():
+            social = UserSocialAuth.create_social_auth(user, uid, backend.name)
     except Exception, e:
         if not SOCIAL_AUTH_MODELS_MODULE.is_integrity_error(e):
             raise
