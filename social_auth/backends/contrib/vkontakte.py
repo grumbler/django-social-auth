@@ -34,8 +34,8 @@ VK_SERVER = 'vk.com'
 VK_DEFAULT_DATA = ['first_name', 'last_name', 'screen_name',
                    'nickname', 'photo']
 
-VKONTAKTE_API_URL = 'https://api.vkontakte.ru/method/'
-VKONTAKTE_SERVER_API_URL = 'http://api.vkontakte.ru/api.php'
+VKONTAKTE_API_URL = 'https://api.vk.com/method/'
+VKONTAKTE_SERVER_API_URL = 'http://api.vk.com/api.php'
 VKONTAKTE_API_VERSION = '3.0'
 
 USE_APP_AUTH = setting('VKONTAKTE_APP_AUTH', False)
