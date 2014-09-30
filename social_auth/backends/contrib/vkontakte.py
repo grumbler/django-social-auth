@@ -179,6 +179,9 @@ class VKontakteOAuth2(BaseOAuth2):
 
         data = vkontakte_api('users.get', params)
 
+        if not data:
+            raise AuthException('Bad response')
+
         if data.get('error'):
             error = data['error']
             msg = error.get('error_msg', 'Unknown error')
@@ -187,9 +190,8 @@ class VKontakteOAuth2(BaseOAuth2):
             else:
                 raise AuthException(self, msg)
 
-        if data:
-            data = data.get('response')[0]
-            data['user_photo'] = data.get('photo')  # Backward compatibility
+        data = data.get('response')[0]
+        data['user_photo'] = data.get('photo')  # Backward compatibility
 
         return data
 
